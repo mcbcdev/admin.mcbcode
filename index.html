@@ -65,7 +65,7 @@
     .message h1 { margin: 0 0 8px; font-size: 20px; }
     .message p { margin: 0 0 18px; color: var(--muted); }
 
-    /* range picker */
+    /* toolbar */
     .toolbar {
       display: flex; align-items: center; justify-content: space-between;
       gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
@@ -95,40 +95,67 @@
     .stat .hint { color: var(--muted); font-size: 12px; margin-top: 2px; }
 
     /* list header */
-    .list-head {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
-    }
+    .list-head { margin-bottom: 12px; }
     .list-head h2 { margin: 0; font-size: 17px; }
 
     /* record cards */
     .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
     .row {
+      display: block; color: inherit; text-decoration: none;
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--r-m); padding: 14px 16px; min-width: 0;
     }
+    a.row:hover { border-color: var(--accent); }
     .row .title { font-weight: 600; overflow-wrap: anywhere; }
     .row .sub { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
     .row .meta {
       display: grid; grid-template-columns: auto 1fr; gap: 2px 12px;
-      margin-top: 10px; font-size: 12px;
+      margin: 10px 0 0; font-size: 12px;
     }
     .row .meta dt { color: var(--muted); }
     .row .meta dd { margin: 0; overflow-wrap: anywhere; }
     .tag {
       display: inline-block; font-size: 11px; padding: 1px 8px; margin-left: 6px;
       border-radius: 999px; border: 1px solid var(--accent); color: var(--accent);
-      vertical-align: middle;
+      vertical-align: middle; font-weight: 400;
     }
+    .tag.warn { border-color: var(--danger); color: var(--danger); }
 
     .status { text-align: center; color: var(--muted); padding: 24px 0; font-size: 13px; }
     .status.error { color: var(--danger); }
     #sentinel { height: 1px; }
 
+    /* user detail */
+    .detail-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .profile-head {
+      display: flex; align-items: center; gap: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r-xl); padding: 20px; margin-bottom: 12px;
+    }
+    .avatar {
+      width: 72px; height: 72px; flex: 0 0 72px; object-fit: cover;
+      border-radius: var(--r-l); background: var(--surface-2); border: 1px solid var(--border);
+    }
+    .profile-head h2 { margin: 0; font-size: 22px; overflow-wrap: anywhere; }
+    .profile-head .sub { color: var(--muted); overflow-wrap: anywhere; }
+    .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r-l); padding: 18px 20px; min-width: 0;
+    }
+    .panel h3 { margin: 0 0 12px; font-size: 15px; }
+    .kv { display: grid; grid-template-columns: minmax(110px, 190px) 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; overflow-wrap: anywhere; }
+    .bio { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+    .empty { color: var(--muted); }
+
     @media (max-width: 560px) {
       .stat .value { font-size: 28px; }
       .stat { padding: 14px 16px; }
       .list { grid-template-columns: 1fr; }
+      .panels { grid-template-columns: 1fr; }
+      .kv { grid-template-columns: 110px 1fr; }
     }
   </style>
 </head>
@@ -168,48 +195,63 @@
         </div>
       </header>
 
-      <div class="toolbar">
-        <div class="segmented" id="rangePicker" role="group" aria-label="time period">
-          <button type="button" data-hours="24" aria-pressed="true">24 hours</button>
-          <button type="button" data-hours="48" aria-pressed="false">48 hours</button>
-          <button type="button" data-hours="168" aria-pressed="false">1 week</button>
-          <button type="button" data-hours="720" aria-pressed="false">30 days</button>
-        </div>
-        <div class="toolbar-right">
-          <div class="segmented" id="modePicker" role="group" aria-label="table">
-            <button type="button" data-mode="users" aria-pressed="true">all users</button>
-            <button type="button" data-mode="projects" aria-pressed="false">projects</button>
+      <!-- LIST VIEW -->
+      <div id="listView">
+        <div class="toolbar">
+          <div class="segmented" id="rangePicker" role="group" aria-label="time period">
+            <button type="button" data-hours="24" aria-pressed="true">24 hours</button>
+            <button type="button" data-hours="48" aria-pressed="false">48 hours</button>
+            <button type="button" data-hours="168" aria-pressed="false">1 week</button>
+            <button type="button" data-hours="720" aria-pressed="false">30 days</button>
           </div>
-          <button class="btn" id="refreshBtn">refresh</button>
+          <div class="toolbar-right">
+            <div class="segmented" id="modePicker" role="group" aria-label="table">
+              <button type="button" data-mode="users" aria-pressed="true">all users</button>
+              <button type="button" data-mode="projects" aria-pressed="false">projects</button>
+            </div>
+            <button class="btn" id="refreshBtn">refresh</button>
+          </div>
         </div>
+
+        <section class="stats" aria-label="stats">
+          <button class="stat" id="statNew" type="button" aria-pressed="false">
+            <div class="label" id="labelNew">new users</div>
+            <div class="value" id="newUsersValue">-</div>
+            <div class="hint">tap to list them</div>
+          </button>
+          <button class="stat" id="statActive" type="button" aria-pressed="false">
+            <div class="label" id="labelSecond">users who logged in</div>
+            <div class="value" id="loggedInValue">-</div>
+            <div class="hint">tap to list them</div>
+          </button>
+        </section>
+
+        <div class="list-head">
+          <h2 id="listTitle">all users</h2>
+        </div>
+
+        <div class="list" id="list"></div>
+        <div class="status" id="listStatus"></div>
+        <div id="sentinel"></div>
       </div>
 
-      <section class="stats" aria-label="stats">
-        <button class="stat" id="statNew" type="button" data-pick="new" aria-pressed="false">
-          <div class="label" id="labelNew">new users</div>
-          <div class="value" id="newUsersValue">-</div>
-          <div class="hint">tap to list them</div>
-        </button>
-        <button class="stat" id="statActive" type="button" data-pick="second" aria-pressed="false">
-          <div class="label" id="labelSecond">users who logged in</div>
-          <div class="value" id="loggedInValue">-</div>
-          <div class="hint">tap to list them</div>
-        </button>
-      </section>
-
-      <div class="list-head">
-        <h2 id="listTitle">all users</h2>
+      <!-- USER DETAIL VIEW (shown when the address has ?user=name) -->
+      <div id="detailView" hidden>
+        <div class="detail-top">
+          <button class="btn" id="backBtn">back</button>
+          <button class="btn" id="detailReloadBtn">reload this user</button>
+        </div>
+        <div class="status" id="detailStatus"></div>
+        <div id="detailBody"></div>
       </div>
-
-      <div class="list" id="list"></div>
-      <div class="status" id="listStatus"></div>
-      <div id="sentinel"></div>
     </main>
   </div>
 
   <script>
     (function () {
       var API = "https://auth.mcbcode.com";
+      var PAGE_SIZE = 20;
+      var STATS_CACHE_MS = 5 * 60 * 1000; // stats are remembered for 5 minutes
 
       // ---- small helpers ----
       function $(id) { return document.getElementById(id); }
@@ -235,7 +277,7 @@
       // d1 times are UTC strings like "2026-11-09 14:30:00"
       function parseUtc(str) {
         if (!str) return null;
-        var d = new Date(str.replace(" ", "T") + "Z");
+        var d = new Date(String(str).replace(" ", "T") + "Z");
         return isNaN(d.getTime()) ? null : d;
       }
 
@@ -266,6 +308,10 @@
       var hasMore = false;
       var loading = false;
       var generation = 0;        // bumps when the list resets, so old responses get ignored
+      var listLoaded = false;    // the list + stats only load once you actually look at the list
+      var savedScroll = 0;
+      var userCache = {};        // users you already opened (so going back and forth costs nothing)
+      var detailGeneration = 0;
 
       var titles = {
         users: { all: "all users", "new": "new users", second: "users who logged in" },
@@ -295,8 +341,7 @@
           if (!data) return;
           $("adminEmail").textContent = data.email;
           showOnly("dashboard");
-          loadStats();
-          resetList();
+          route();
         }).catch(function (err) {
           $("errorText").textContent = err.message || "something went wrong. try again.";
           showOnly("screenError");
@@ -316,8 +361,74 @@
       $("logoutBtn2").addEventListener("click", logout);
       $("retryBtn").addEventListener("click", checkAccess);
 
-      // ---- stats ----
-      function loadStats() {
+      // ---- routing (?user=name shows that user's page) ----
+      function currentUserParam() {
+        return new URLSearchParams(location.search).get("user");
+      }
+
+      function route() {
+        var name = currentUserParam();
+        if (name) {
+          $("listView").hidden = true;
+          $("detailView").hidden = false;
+          window.scrollTo(0, 0);
+          loadUserDetail(name, false);
+        } else {
+          $("detailView").hidden = true;
+          $("listView").hidden = false;
+          ensureListLoaded();
+          window.scrollTo(0, savedScroll);
+        }
+      }
+
+      function openUser(name) {
+        savedScroll = window.scrollY;
+        history.pushState({ fromList: true }, "", "?user=" + encodeURIComponent(name));
+        route();
+      }
+
+      $("backBtn").addEventListener("click", function () {
+        if (history.state && history.state.fromList) {
+          history.back();
+        } else {
+          history.pushState({}, "", location.pathname);
+          route();
+        }
+      });
+
+      window.addEventListener("popstate", function () {
+        if ($("dashboard").hidden) return;
+        route();
+      });
+
+      // the first time the list is shown, load stats + first batch (not before)
+      function ensureListLoaded() {
+        if (listLoaded) return;
+        listLoaded = true;
+        updateLabels();
+        loadStats(false);
+        resetList();
+      }
+
+      // ---- stats (cached so refreshing / switching does not re-count every time) ----
+      function showStats(a, b) {
+        $("newUsersValue").textContent = Number(a).toLocaleString();
+        $("loggedInValue").textContent = Number(b).toLocaleString();
+      }
+
+      function loadStats(force) {
+        var key = "mcbadmin_stats_" + mode + "_" + hours;
+
+        if (!force) {
+          try {
+            var cached = JSON.parse(sessionStorage.getItem(key) || "null");
+            if (cached && Date.now() - cached.t < STATS_CACHE_MS) {
+              showStats(cached.a, cached.b);
+              return;
+            }
+          } catch (e) { /* storage not available, just fetch */ }
+        }
+
         $("newUsersValue").textContent = "...";
         $("loggedInValue").textContent = "...";
         var requestedHours = hours;
@@ -326,11 +437,13 @@
           if (!res.ok) throw new Error("stats failed");
           return res.json();
         }).then(function (data) {
-          if (requestedHours !== hours || requestedMode !== mode) return; // user already picked something else
           var a = requestedMode === "users" ? data.new_users : data.new_projects;
           var b = requestedMode === "users" ? data.logged_in_users : data.edited_projects;
-          $("newUsersValue").textContent = Number(a).toLocaleString();
-          $("loggedInValue").textContent = Number(b).toLocaleString();
+          try {
+            sessionStorage.setItem("mcbadmin_stats_" + requestedMode + "_" + requestedHours, JSON.stringify({ t: Date.now(), a: a, b: b }));
+          } catch (e) { /* ignore */ }
+          if (requestedHours !== hours || requestedMode !== mode) return; // user already picked something else
+          showStats(a, b);
         }).catch(function () {
           $("newUsersValue").textContent = "?";
           $("loggedInValue").textContent = "?";
@@ -344,7 +457,19 @@
       }
 
       function renderUser(u) {
-        var row = el("div", "row");
+        // users with a username are links, so a click opens ?user=name
+        var row;
+        if (u.username) {
+          row = el("a", "row");
+          row.href = "?user=" + encodeURIComponent(u.username);
+          row.addEventListener("click", function (e) {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // let new-tab clicks work normally
+            e.preventDefault();
+            openUser(u.username);
+          });
+        } else {
+          row = el("div", "row");
+        }
         var title = el("div", "title", u.username || "(no username)");
         if (u.rank) title.appendChild(el("span", "tag", u.rank));
         if (u.subscription_tier) title.appendChild(el("span", "tag", u.subscription_tier));
@@ -383,6 +508,13 @@
         s.className = "status" + (isError ? " error" : "");
       }
 
+      function rangeLabel() {
+        if (hours === 24) return "24 hours";
+        if (hours === 48) return "48 hours";
+        if (hours === 168) return "week";
+        return "30 days";
+      }
+
       function resetList() {
         generation++;
         nextCursor = null;
@@ -394,21 +526,14 @@
         loadMore();
       }
 
-      function rangeLabel() {
-        if (hours === 24) return "24 hours";
-        if (hours === 48) return "48 hours";
-        if (hours === 168) return "week";
-        return "30 days";
-      }
-
       function listUrl() {
         var path = mode === "projects" ? "/admin/projects" : "/admin/users";
-        var params = ["view=" + serverView(), "hours=" + hours, "limit=25"];
+        var params = ["view=" + serverView(), "hours=" + hours, "limit=" + PAGE_SIZE];
         if (nextCursor) params.push("cursor=" + encodeURIComponent(nextCursor));
         return path + "?" + params.join("&");
       }
 
-      // loads ONE small batch (25 rows). the scroll watcher calls this again when needed.
+      // loads ONE small batch. the scroll watcher calls this again when needed.
       function loadMore() {
         if (loading || !hasMore) return;
         loading = true;
@@ -432,8 +557,7 @@
           loading = false;
           if (hasMore) {
             setStatus("");
-            // if the screen still is not full, keep loading
-            requestAnimationFrame(checkSentinel);
+            requestAnimationFrame(checkSentinel); // if the screen still is not full, keep loading
           } else {
             setStatus(list.children.length ? "that is everything" : "nothing here for this period");
           }
@@ -446,6 +570,7 @@
 
       // ---- infinite scroll ----
       function checkSentinel() {
+        if ($("listView").hidden) return; // do not load while looking at a user
         var rect = $("sentinel").getBoundingClientRect();
         if (rect.top < window.innerHeight + 300) loadMore();
       }
@@ -457,6 +582,151 @@
       } else {
         window.addEventListener("scroll", checkSentinel);
       }
+
+      // ---- user detail ----
+      function yesNo(v) { return v ? "yes" : "no"; }
+
+      function show(v) {
+        if (v === null || v === undefined || v === "") return "-";
+        return String(v);
+      }
+
+      function dateWithAgo(v) {
+        return v ? fullDate(v) + " (" + timeAgo(v) + ")" : "never";
+      }
+
+      function panel(title, rows) {
+        var box = el("section", "panel");
+        box.appendChild(el("h3", "", title));
+        var dl = el("dl", "kv");
+        rows.forEach(function (r) {
+          dl.appendChild(el("dt", "", r[0]));
+          dl.appendChild(el("dd", "", r[1]));
+        });
+        box.appendChild(dl);
+        return box;
+      }
+
+      function obsidianStatus(u) {
+        if (u.subscription_tier !== "obsidian") return "no";
+        if (!u.subscription_expires_at) return "yes (never expires)";
+        var d = parseUtc(u.subscription_expires_at);
+        return d && d.getTime() > Date.now() ? "yes" : "expired";
+      }
+
+      function renderUserDetail(u) {
+        var body = $("detailBody");
+        body.textContent = "";
+
+        // header
+        var head = el("div", "profile-head");
+        if (u.pfp_url && String(u.pfp_url).indexOf("https://") === 0) {
+          var img = el("img", "avatar");
+          img.src = u.pfp_url;
+          img.alt = "";
+          img.referrerPolicy = "no-referrer";
+          head.appendChild(img);
+        } else {
+          head.appendChild(el("div", "avatar"));
+        }
+        var info = el("div");
+        var h = el("h2", "", u.username || "(no username)");
+        if (u.rank) h.appendChild(el("span", "tag", u.rank));
+        if (u.subscription_tier) h.appendChild(el("span", "tag", u.subscription_tier));
+        info.appendChild(h);
+        info.appendChild(el("div", "sub", u.email || ""));
+        head.appendChild(info);
+        body.appendChild(head);
+
+        var panels = el("div", "panels");
+
+        panels.appendChild(panel("account", [
+          ["id", show(u.id)],
+          ["username", show(u.username)],
+          ["email", show(u.email)],
+          ["email confirmed", yesNo(u.email_confirmed)],
+          ["joined", dateWithAgo(u.created_at)],
+          ["last login", dateWithAgo(u.last_login_at)],
+          ["rank", show(u.rank)],
+          ["points", String(u.points || 0)],
+          ["max saves", show(u.max_saves)],
+          ["skill level", u.skill ? u.skill + " of 5" : "-"],
+          ["profile picture url", show(u.pfp_url)]
+        ]));
+
+        // bio
+        var bioBox = el("section", "panel");
+        bioBox.appendChild(el("h3", "", "bio"));
+        if (u.bio) bioBox.appendChild(el("p", "bio", u.bio));
+        else bioBox.appendChild(el("p", "empty", "no bio"));
+        panels.appendChild(bioBox);
+
+        panels.appendChild(panel("subscription", [
+          ["tier", show(u.subscription_tier)],
+          ["obsidian active", obsidianStatus(u)],
+          ["expires", u.subscription_expires_at ? dateWithAgo(u.subscription_expires_at) : "-"],
+          ["stripe customer id", show(u.stripe_customer_id)],
+          ["stripe subscription id", show(u.stripe_subscription_id)]
+        ]));
+
+        panels.appendChild(panel("linked accounts", [
+          ["github id", show(u.github_id)],
+          ["google id", show(u.google_id)],
+          ["discord id", show(u.discord_id)],
+          ["microsoft id", show(u.microsoft_id)],
+          ["xbox xuid", show(u.xbox_xuid)],
+          ["github sync username", show(u.github_sync_username)],
+          ["github app username", show(u.github_app_username)],
+          ["github app installation id", show(u.github_app_installation_id)]
+        ]));
+
+        panels.appendChild(panel("security", [
+          ["has a password", yesNo(u.has_password)],
+          ["github sync token set", yesNo(u.has_github_sync_token)]
+        ]));
+
+        body.appendChild(panels);
+      }
+
+      function setDetailStatus(text, isError) {
+        var s = $("detailStatus");
+        s.textContent = text;
+        s.className = "status" + (isError ? " error" : "");
+      }
+
+      function loadUserDetail(name, force) {
+        var key = name.toLowerCase();
+        var myGen = ++detailGeneration;
+        document.title = name + " - mcbcode admin";
+
+        if (!force && userCache[key]) {
+          setDetailStatus("");
+          renderUserDetail(userCache[key]);
+          return;
+        }
+
+        $("detailBody").textContent = "";
+        setDetailStatus("loading...");
+        api("/admin/user?username=" + encodeURIComponent(name)).then(function (res) {
+          if (res.status === 401 || res.status === 403) { location.reload(); return null; }
+          if (res.status === 404) { setDetailStatus("no user named \"" + name + "\".", true); return null; }
+          if (!res.ok) throw new Error("server said " + res.status);
+          return res.json();
+        }).then(function (data) {
+          if (!data || myGen !== detailGeneration) return;
+          userCache[key] = data.user;
+          setDetailStatus("");
+          renderUserDetail(data.user);
+        }).catch(function (err) {
+          if (myGen !== detailGeneration) return;
+          setDetailStatus("could not load this user (" + err.message + ").", true);
+        });
+      }
+
+      $("detailReloadBtn").addEventListener("click", function () {
+        var name = currentUserParam();
+        if (name) loadUserDetail(name, true);
+      });
 
       // ---- buttons ----
       function setPressed(container, attr, value) {
@@ -487,7 +757,7 @@
         mode = newMode;
         view = "all";
         syncButtons();
-        loadStats();
+        loadStats(false);
         resetList();
       }
 
@@ -498,7 +768,7 @@
         if (h === hours) return;
         hours = h;
         setPressed($("rangePicker"), "data-hours", hours);
-        loadStats();
+        loadStats(false);
         if (view !== "all") resetList();
       });
 
@@ -510,8 +780,10 @@
       $("statNew").addEventListener("click", function () { switchView("new"); });
       $("statActive").addEventListener("click", function () { switchView("second"); });
 
+      // refresh is the only button that skips the saved stats and re-reads everything
       $("refreshBtn").addEventListener("click", function () {
-        loadStats();
+        userCache = {};
+        loadStats(true);
         resetList();
       });
 
