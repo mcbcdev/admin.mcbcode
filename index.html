@@ -70,6 +70,7 @@
       display: flex; align-items: center; justify-content: space-between;
       gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
     }
+    .toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .segmented {
       display: inline-flex; background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--r-m); padding: 4px; gap: 4px; flex-wrap: wrap;
@@ -174,17 +175,23 @@
           <button type="button" data-hours="168" aria-pressed="false">1 week</button>
           <button type="button" data-hours="720" aria-pressed="false">30 days</button>
         </div>
-        <button class="btn" id="refreshBtn">refresh</button>
+        <div class="toolbar-right">
+          <div class="segmented" id="modePicker" role="group" aria-label="table">
+            <button type="button" data-mode="users" aria-pressed="true">all users</button>
+            <button type="button" data-mode="projects" aria-pressed="false">projects</button>
+          </div>
+          <button class="btn" id="refreshBtn">refresh</button>
+        </div>
       </div>
 
       <section class="stats" aria-label="stats">
-        <button class="stat" id="statNew" type="button" data-view="new" aria-pressed="false">
-          <div class="label">new users</div>
+        <button class="stat" id="statNew" type="button" data-pick="new" aria-pressed="false">
+          <div class="label" id="labelNew">new users</div>
           <div class="value" id="newUsersValue">-</div>
           <div class="hint">tap to list them</div>
         </button>
-        <button class="stat" id="statActive" type="button" data-view="active" aria-pressed="false">
-          <div class="label">users who logged in</div>
+        <button class="stat" id="statActive" type="button" data-pick="second" aria-pressed="false">
+          <div class="label" id="labelSecond">users who logged in</div>
           <div class="value" id="loggedInValue">-</div>
           <div class="hint">tap to list them</div>
         </button>
@@ -192,10 +199,6 @@
 
       <div class="list-head">
         <h2 id="listTitle">all users</h2>
-        <div class="segmented" id="viewPicker" role="group" aria-label="table">
-          <button type="button" data-view="all" aria-pressed="true">all users</button>
-          <button type="button" data-view="projects" aria-pressed="false">projects</button>
-        </div>
       </div>
 
       <div class="list" id="list"></div>
@@ -257,18 +260,28 @@
 
       // ---- state ----
       var hours = 24;
-      var view = "all";          // all | new | active | projects
+      var mode = "users";        // users | projects
+      var view = "all";          // all | new | second  (second = logged in for users, edited for projects)
       var nextCursor = null;
       var hasMore = false;
       var loading = false;
       var generation = 0;        // bumps when the list resets, so old responses get ignored
 
       var titles = {
-        all: "all users",
-        "new": "new users",
-        active: "users who logged in",
-        projects: "projects"
+        users: { all: "all users", "new": "new users", second: "users who logged in" },
+        projects: { all: "all projects", "new": "new projects", second: "projects that were edited" }
       };
+
+      // what the server calls each view
+      function serverView() {
+        if (view === "second") return mode === "users" ? "active" : "edited";
+        return view;
+      }
+
+      function updateLabels() {
+        $("labelNew").textContent = mode === "users" ? "new users" : "new projects";
+        $("labelSecond").textContent = mode === "users" ? "users who logged in" : "projects that were edited";
+      }
 
       // ---- sign in / access check ----
       function checkAccess() {
@@ -308,13 +321,16 @@
         $("newUsersValue").textContent = "...";
         $("loggedInValue").textContent = "...";
         var requestedHours = hours;
-        api("/admin/stats?hours=" + requestedHours).then(function (res) {
+        var requestedMode = mode;
+        api("/admin/stats?hours=" + requestedHours + "&scope=" + requestedMode).then(function (res) {
           if (!res.ok) throw new Error("stats failed");
           return res.json();
         }).then(function (data) {
-          if (requestedHours !== hours) return; // user already picked another range
-          $("newUsersValue").textContent = Number(data.new_users).toLocaleString();
-          $("loggedInValue").textContent = Number(data.logged_in_users).toLocaleString();
+          if (requestedHours !== hours || requestedMode !== mode) return; // user already picked something else
+          var a = requestedMode === "users" ? data.new_users : data.new_projects;
+          var b = requestedMode === "users" ? data.logged_in_users : data.edited_projects;
+          $("newUsersValue").textContent = Number(a).toLocaleString();
+          $("loggedInValue").textContent = Number(b).toLocaleString();
         }).catch(function () {
           $("newUsersValue").textContent = "?";
           $("loggedInValue").textContent = "?";
@@ -373,7 +389,7 @@
         hasMore = true;
         loading = false;
         $("list").textContent = "";
-        $("listTitle").textContent = titles[view] + (view === "new" || view === "active" ? " (last " + rangeLabel() + ")" : "");
+        $("listTitle").textContent = titles[mode][view] + (view !== "all" ? " (last " + rangeLabel() + ")" : "");
         setStatus("loading...");
         loadMore();
       }
@@ -386,15 +402,8 @@
       }
 
       function listUrl() {
-        var path, params = [];
-        if (view === "projects") {
-          path = "/admin/projects";
-        } else {
-          path = "/admin/users";
-          params.push("view=" + view);
-          params.push("hours=" + hours);
-        }
-        params.push("limit=25");
+        var path = mode === "projects" ? "/admin/projects" : "/admin/users";
+        var params = ["view=" + serverView(), "hours=" + hours, "limit=25"];
         if (nextCursor) params.push("cursor=" + encodeURIComponent(nextCursor));
         return path + "?" + params.join("&");
       }
@@ -404,7 +413,7 @@
         if (loading || !hasMore) return;
         loading = true;
         var myGeneration = generation;
-        var myView = view;
+        var myMode = mode;
         setStatus("loading...");
 
         api(listUrl()).then(function (res) {
@@ -416,7 +425,7 @@
           if (myGeneration !== generation) return; // list was reset while we waited
           var list = $("list");
           data.rows.forEach(function (r) {
-            list.appendChild(myView === "projects" ? renderProject(r) : renderUser(r));
+            list.appendChild(myMode === "projects" ? renderProject(r) : renderUser(r));
           });
           nextCursor = data.next_cursor;
           hasMore = !!data.has_more;
@@ -457,18 +466,28 @@
         }
       }
 
-      function syncViewButtons() {
-        setPressed($("viewPicker"), "data-view", view);
+      function syncButtons() {
+        setPressed($("modePicker"), "data-mode", mode);
         $("statNew").setAttribute("aria-pressed", String(view === "new"));
-        $("statActive").setAttribute("aria-pressed", String(view === "active"));
+        $("statActive").setAttribute("aria-pressed", String(view === "second"));
+        updateLabels();
       }
 
       function switchView(newView) {
-        // tapping the active stat card again goes back to all users
-        if (newView === view && (newView === "new" || newView === "active")) newView = "all";
+        // tapping the active stat card again goes back to the full list
+        if (newView === view && newView !== "all") newView = "all";
         if (newView === view) return;
         view = newView;
-        syncViewButtons();
+        syncButtons();
+        resetList();
+      }
+
+      function switchMode(newMode) {
+        if (newMode === mode) return;
+        mode = newMode;
+        view = "all";
+        syncButtons();
+        loadStats();
         resetList();
       }
 
@@ -480,16 +499,16 @@
         hours = h;
         setPressed($("rangePicker"), "data-hours", hours);
         loadStats();
-        if (view === "new" || view === "active") resetList();
+        if (view !== "all") resetList();
       });
 
-      $("viewPicker").addEventListener("click", function (e) {
-        var btn = e.target.closest("button[data-view]");
-        if (btn) switchView(btn.getAttribute("data-view"));
+      $("modePicker").addEventListener("click", function (e) {
+        var btn = e.target.closest("button[data-mode]");
+        if (btn) switchMode(btn.getAttribute("data-mode"));
       });
 
       $("statNew").addEventListener("click", function () { switchView("new"); });
-      $("statActive").addEventListener("click", function () { switchView("active"); });
+      $("statActive").addEventListener("click", function () { switchView("second"); });
 
       $("refreshBtn").addEventListener("click", function () {
         loadStats();
